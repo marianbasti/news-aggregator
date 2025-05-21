@@ -91,6 +91,10 @@ INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 ```
 
+### Dashboard
+
+The application includes a simple dashboard for monitoring the status of the RSS feed ingestion process. You can access it at `http://localhost:8000/api/db/dashboard`.
+
 ### Accessing the API
 
 Once the server is running, you can access:
