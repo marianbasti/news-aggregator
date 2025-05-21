@@ -403,3 +403,22 @@ async def get_deep_analysis_data():
     except Exception as e:
         logger.error(f"Error getting deep analysis data: {e}")
         return {"error": str(e)}
+
+@router.get("/articles_by_sentiment/{sentiment_label}", response_model=Dict[str, Any], summary="Get articles by sentiment label")
+async def get_articles_by_sentiment(sentiment_label: str):
+    """
+    Retrieve articles from the database filtered by a specific sentiment label.
+    Projects only title, url, and source_name.
+    """
+    try:
+        collection = await get_article_collection()
+        query = {"llm_sentiment": sentiment_label}
+        projection = {"title": 1, "url": 1, "source_name": 1, "_id": 0}
+        
+        articles_cursor = collection.find(query, projection)
+        articles = await articles_cursor.to_list(length=None) # Get all matching articles
+        
+        return {"articles": articles}
+    except Exception as e:
+        logger.error(f"Error getting articles by sentiment '{sentiment_label}': {e}")
+        return {"error": "Database error"}
