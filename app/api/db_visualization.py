@@ -42,14 +42,37 @@ async def get_db_stats():
         return {"error": str(e)}
 
 @router.get("/articles", response_model=Dict[str, Any], summary="Get article collection data")
-async def get_articles_data(limit: int = 20, skip: int = 0):
+async def get_articles_data(request: Request, limit: int = Query(20, ge=1, le=200), skip: int = Query(0, ge=0)):
     """
-    Retrieve articles data from the database with pagination.
+    Retrieve articles data from the database with pagination and dynamic filtering.
     """
     try:
         collection = await get_article_collection()
-        total = await collection.count_documents({})
-        articles_cursor = collection.find({}).skip(skip).limit(limit)
+        
+        query_params = request.query_params
+        filter_query: Dict[str, Any] = {} # Ensure type for clarity
+        
+        for key, value in query_params.items():
+            if key not in ["limit", "skip"]: # Exclude pagination params from filters
+                if key == "llm_requires_deep_analysis":
+                    if value.lower() == "true":
+                        filter_query[key] = True
+                    elif value.lower() == "false":
+                        filter_query[key] = False
+                    # else: if value is not 'true' or 'false', it's ignored for this key.
+                    # Consider raising an error for invalid boolean values if strictness is needed.
+                # Example for a numeric field, if one existed:
+                # elif key == "some_numeric_field":
+                #     try:
+                #         filter_query[key] = int(value)
+                #     except ValueError:
+                #         logger.warning(f"Invalid value for numeric filter {key}: {value}")
+                #         # Optionally raise HTTPException for bad request
+                else:
+                    filter_query[key] = value
+        
+        total = await collection.count_documents(filter_query)
+        articles_cursor = collection.find(filter_query).skip(skip).limit(limit)
         articles = await articles_cursor.to_list(length=limit)
         
         # Convert ObjectId to string for JSON serialization
@@ -60,9 +83,10 @@ async def get_articles_data(limit: int = 20, skip: int = 0):
         return {
             "total": total,
             "articles": articles,
-            "page": skip // limit + 1,
-            "pages": (total + limit - 1) // limit,
-            "limit": limit
+            "page": skip // limit + 1 if limit > 0 else 1, # Ensure page is at least 1
+            "pages": (total + limit - 1) // limit if limit > 0 else 0,
+            "limit": limit,
+            "active_filters": filter_query # Optional: return active filters
         }
     except Exception as e:
         logger.error(f"Error getting articles data: {e}")

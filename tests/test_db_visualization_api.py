@@ -234,3 +234,209 @@ async def test_get_articles_by_sentiment_case_sensitivity(async_client: AsyncCli
     # This has been already corrected in the original test case test_get_articles_by_sentiment_url_encoding.
     # So no further changes needed here.
     pass
+
+# --- New Sample Data and Tests for /api/db/articles endpoint ---
+
+sample_articles_data_for_filtering = [
+    {
+        "_id": "filter_1", "title": "Positive News Today", "url": "http://example.com/positive",
+        "source_name": "Good News Network", "llm_sentiment": "Positive",
+        "llm_category": "News", "llm_requires_deep_analysis": False, "fetched_date": "2023-01-01T00:00:00Z"
+    },
+    {
+        "_id": "filter_2", "title": "Neutral Report on Markets", "url": "http://example.com/neutral",
+        "source_name": "MarketWatch", "llm_sentiment": "Neutral",
+        "llm_category": "Finance", "llm_requires_deep_analysis": True, "fetched_date": "2023-01-02T00:00:00Z"
+    },
+    {
+        "_id": "filter_3", "title": "Another Positive Story", "url": "http://example.com/positive2",
+        "source_name": "Happy Times", "llm_sentiment": "Positive",
+        "llm_category": "Lifestyle", "llm_requires_deep_analysis": False, "fetched_date": "2023-01-03T00:00:00Z"
+    },
+    {
+        "_id": "filter_4", "title": "Negative Outlook on Weather", "url": "http://example.com/negative",
+        "source_name": "Weather Channel", "llm_sentiment": "Negative",
+        "llm_category": "Weather", "llm_requires_deep_analysis": True, "fetched_date": "2023-01-04T00:00:00Z"
+    },
+    {
+        "_id": "filter_5", "title": "Tech Article Requiring Analysis", "url": "http://example.com/tech",
+        "source_name": "Tech Today", "llm_sentiment": "Neutral",
+        "llm_category": "Technology", "llm_requires_deep_analysis": True, "fetched_date": "2023-01-05T00:00:00Z"
+    }
+]
+
+def assert_articles_match_titles(response_articles: list, expected_titles: set):
+    returned_titles = {article['title'] for article in response_articles}
+    assert returned_titles == expected_titles
+
+@pytest.mark.asyncio
+async def test_get_articles_no_filters(async_client: AsyncClient, article_collection):
+    await article_collection.delete_many({})
+    await article_collection.insert_many(sample_articles_data_for_filtering)
+    
+    response = await async_client.get("/api/db/articles?limit=10")
+    assert response.status_code == 200
+    response_json = response.json()
+    
+    assert "articles" in response_json
+    assert len(response_json["articles"]) == 5
+    assert response_json["total"] == 5
+    assert response_json["active_filters"] == {}
+    assert response_json["limit"] == 10
+    assert response_json["page"] == 1
+    assert response_json["pages"] == 1
+
+@pytest.mark.asyncio
+async def test_get_articles_single_string_filter(async_client: AsyncClient, article_collection):
+    await article_collection.delete_many({})
+    await article_collection.insert_many(sample_articles_data_for_filtering)
+    
+    response = await async_client.get("/api/db/articles?source_name=MarketWatch")
+    assert response.status_code == 200
+    response_json = response.json()
+    
+    assert len(response_json["articles"]) == 1
+    assert response_json["total"] == 1
+    assert response_json["active_filters"] == {"source_name": "MarketWatch"}
+    assert_articles_match_titles(response_json["articles"], {"Neutral Report on Markets"})
+
+@pytest.mark.asyncio
+async def test_get_articles_single_boolean_filter_true(async_client: AsyncClient, article_collection):
+    await article_collection.delete_many({})
+    await article_collection.insert_many(sample_articles_data_for_filtering)
+    
+    response = await async_client.get("/api/db/articles?llm_requires_deep_analysis=true")
+    assert response.status_code == 200
+    response_json = response.json()
+    
+    assert len(response_json["articles"]) == 3
+    assert response_json["total"] == 3
+    assert response_json["active_filters"] == {"llm_requires_deep_analysis": True}
+    assert_articles_match_titles(response_json["articles"], {
+        "Neutral Report on Markets", "Negative Outlook on Weather", "Tech Article Requiring Analysis"
+    })
+
+@pytest.mark.asyncio
+async def test_get_articles_single_boolean_filter_false(async_client: AsyncClient, article_collection):
+    await article_collection.delete_many({})
+    await article_collection.insert_many(sample_articles_data_for_filtering)
+    
+    response = await async_client.get("/api/db/articles?llm_requires_deep_analysis=false")
+    assert response.status_code == 200
+    response_json = response.json()
+    
+    assert len(response_json["articles"]) == 2
+    assert response_json["total"] == 2
+    assert response_json["active_filters"] == {"llm_requires_deep_analysis": False}
+    assert_articles_match_titles(response_json["articles"], {
+        "Positive News Today", "Another Positive Story"
+    })
+
+@pytest.mark.asyncio
+async def test_get_articles_multiple_filters(async_client: AsyncClient, article_collection):
+    await article_collection.delete_many({})
+    await article_collection.insert_many(sample_articles_data_for_filtering)
+    
+    response = await async_client.get("/api/db/articles?source_name=Good+News+Network&llm_sentiment=Positive&llm_category=News")
+    assert response.status_code == 200
+    response_json = response.json()
+    
+    assert len(response_json["articles"]) == 1
+    assert response_json["total"] == 1
+    assert response_json["active_filters"] == {
+        "source_name": "Good News Network",
+        "llm_sentiment": "Positive",
+        "llm_category": "News"
+    }
+    assert_articles_match_titles(response_json["articles"], {"Positive News Today"})
+
+@pytest.mark.asyncio
+async def test_get_articles_multiple_filters_mixed_types(async_client: AsyncClient, article_collection):
+    await article_collection.delete_many({})
+    await article_collection.insert_many(sample_articles_data_for_filtering)
+    
+    response = await async_client.get("/api/db/articles?llm_sentiment=Neutral&llm_requires_deep_analysis=true")
+    assert response.status_code == 200
+    response_json = response.json()
+    
+    assert len(response_json["articles"]) == 2
+    assert response_json["total"] == 2
+    assert response_json["active_filters"] == {
+        "llm_sentiment": "Neutral",
+        "llm_requires_deep_analysis": True
+    }
+    assert_articles_match_titles(response_json["articles"], {
+        "Neutral Report on Markets", "Tech Article Requiring Analysis"
+    })
+
+@pytest.mark.asyncio
+async def test_get_articles_filter_no_results(async_client: AsyncClient, article_collection):
+    await article_collection.delete_many({})
+    await article_collection.insert_many(sample_articles_data_for_filtering)
+    
+    response = await async_client.get("/api/db/articles?source_name=NonExistentSource")
+    assert response.status_code == 200
+    response_json = response.json()
+    
+    assert len(response_json["articles"]) == 0
+    assert response_json["total"] == 0
+    assert response_json["active_filters"] == {"source_name": "NonExistentSource"}
+
+@pytest.mark.asyncio
+async def test_get_articles_pagination_with_filters(async_client: AsyncClient, article_collection):
+    await article_collection.delete_many({})
+    await article_collection.insert_many(sample_articles_data_for_filtering)
+    
+    # Request 1
+    response1 = await async_client.get("/api/db/articles?llm_requires_deep_analysis=true&limit=2&skip=0")
+    assert response1.status_code == 200
+    response1_json = response1.json()
+    
+    assert len(response1_json["articles"]) == 2
+    assert response1_json["total"] == 3
+    assert response1_json["page"] == 1
+    assert response1_json["pages"] == 2
+    assert response1_json["active_filters"] == {"llm_requires_deep_analysis": True}
+    # Titles for first page (order might vary, so check against expected set for this page)
+    page1_titles = {article['title'] for article in response1_json['articles']}
+    assert len(page1_titles.intersection({"Neutral Report on Markets", "Negative Outlook on Weather", "Tech Article Requiring Analysis"})) == 2
+
+
+    # Request 2
+    response2 = await async_client.get("/api/db/articles?llm_requires_deep_analysis=true&limit=2&skip=2")
+    assert response2.status_code == 200
+    response2_json = response2.json()
+    
+    assert len(response2_json["articles"]) == 1
+    assert response2_json["total"] == 3
+    assert response2_json["page"] == 2
+    assert response2_json["pages"] == 2
+    assert response2_json["active_filters"] == {"llm_requires_deep_analysis": True}
+    # Check remaining title
+    remaining_titles = {"Neutral Report on Markets", "Negative Outlook on Weather", "Tech Article Requiring Analysis"} - page1_titles
+    assert_articles_match_titles(response2_json["articles"], remaining_titles)
+
+
+@pytest.mark.asyncio
+async def test_get_articles_filter_case_sensitivity(async_client: AsyncClient, article_collection):
+    await article_collection.delete_many({})
+    await article_collection.insert_many(sample_articles_data_for_filtering)
+    
+    # Test with lowercase when DB has uppercase
+    response_lower = await async_client.get("/api/db/articles?llm_category=news")
+    assert response_lower.status_code == 200
+    response_lower_json = response_lower.json()
+    
+    assert len(response_lower_json["articles"]) == 0
+    assert response_lower_json["total"] == 0
+    assert response_lower_json["active_filters"] == {"llm_category": "news"}
+    
+    # Test with exact case
+    response_exact = await async_client.get("/api/db/articles?llm_category=News")
+    assert response_exact.status_code == 200
+    response_exact_json = response_exact.json()
+    
+    assert len(response_exact_json["articles"]) == 1
+    assert response_exact_json["total"] == 1
+    assert response_exact_json["active_filters"] == {"llm_category": "News"}
+    assert_articles_match_titles(response_exact_json["articles"], {"Positive News Today"})

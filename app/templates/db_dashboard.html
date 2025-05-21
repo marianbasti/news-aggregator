@@ -10,10 +10,12 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
             line-height: 1.6;
             color: #333;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
+            /* max-width: 1200px; */ /* Removed to allow full width layout */
+            /* margin: 0 auto; */ /* Removed for full width */
+            /* padding: 20px; */ /* Body padding removed, handled by inner containers */
             background-color: #f5f7fa;
+            margin: 0; /* Ensure no default body margin */
+            padding: 0; /* Ensure no default body padding */
         }
         h1, h2, h3 {
             color: #2c3e50;
@@ -133,6 +135,75 @@
             margin-top: 5px;
         }
 
+        /* New Dashboard Layout Styles */
+        .dashboard-container {
+            display: flex;
+            height: calc(100vh - 70px); /* Adjust 70px based on actual header height */
+            width: 100%;
+        }
+        .sidebar {
+            width: 250px; /* Or desired width */
+            padding: 20px;
+            background-color: #f0f0f0; /* Or a suitable color */
+            overflow-y: auto;
+            border-right: 1px solid #ccc;
+        }
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            overflow-y: auto; /* As per prompt, though hidden with auto on children is also fine */
+        }
+        .graphs-column {
+            flex: 0 0 60%; /* Or a specific proportion like flex: 1; */
+            padding: 20px;
+            overflow-y: auto;
+            background-color: #f8f9fa; /* Light background for graph area - kept from previous state, seems reasonable */
+        }
+        .articles-column {
+            flex: 0 0 40%; /* Or a specific proportion like flex: 1; */
+            padding: 20px;
+            border-left: 1px solid #ddd;
+            overflow-y: auto;
+            background-color: #ffffff; /* White background for article list */
+        }
+        #articles-list-placeholder {
+            padding: 20px;
+            text-align: center;
+            color: #6c757d;
+        }
+        /* End New Dashboard Layout Styles */
+
+        /* Styles for dynamically loaded articles list */
+        .article-list-ul {
+            list-style-type: none;
+            padding: 0;
+            text-align: left; /* Override parent's text-align */
+        }
+        .article-list-li {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        .article-list-li:last-child {
+            border-bottom: none;
+        }
+        .article-title a {
+            font-weight: bold;
+            font-size: 1.1em;
+            color: #337ab7; /* Bootstrap link color for consistency */
+            text-decoration: none;
+            display: block; /* Makes the whole title area clickable */
+            margin-bottom: 5px;
+        }
+        .article-title a:hover {
+            text-decoration: underline;
+        }
+        .article-meta {
+            font-size: 0.9em;
+            color: #555;
+        }
+        /* End Styles for dynamically loaded articles list */
+
         /* Styling for sentiment articles display area */
         #sentimentArticlesDisplayArea {
             margin-top: 20px;
@@ -177,6 +248,49 @@
             color: #555;
             font-style: italic;
         }
+
+        /* Sidebar specific styles */
+        .sidebar h2 {
+            font-size: 1.2em; /* Slightly smaller heading */
+            margin-top: 10px;
+            margin-bottom: 15px;
+        }
+
+        .sidebar button,
+        .sidebar input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            box-sizing: border-box; /* Include padding and border in the element's total width and height */
+        }
+        
+        /* Specific styling for buttons inside the analysis form to override default button styles if needed */
+        .sidebar #analysisForm button {
+            margin-top: 5px; /* Keep the small top margin for buttons in the form */
+        }
+
+
+        .sidebar .status-area,
+        .sidebar #analysisResult {
+            background-color: #fff; /* Or a slightly different shade from sidebar bg */
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 0.9em;
+            word-wrap: break-word; /* For analysisResult */
+        }
+
+        .sidebar .loader {
+            margin: 5px auto 10px auto !important; /* Center loader if displayed as block/flex, added !important for inline style override */
+            display: block !important; /* Ensure it behaves as a block for centering, overriding inline 'display: none/inline-flex' */
+        }
+
+        /* Adjustments if the buttons are inside a form or another div */
+        .sidebar form { /* This will apply to the new <form> tag */
+            display: flex;
+            flex-direction: column;
+        }
     </style>
 </head>
 <body>
@@ -188,64 +302,291 @@
         </div>
     </div>
 
-    <div class="action-section" style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #eee;">
-        <h2>Article Actions</h2>
-        <button id="fetchArticlesBtn" style="background-color: #3498db; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 16px;">Fetch New Articles</button>
-        <div class="loader" id="fetchLoader" style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: none; margin-left: 10px;"></div>
-        <div class="status-area" id="fetchStatus" style="margin-top: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background-color: #fdfdfd; min-height: 40px;">
-            <p class="status-info" style="margin:0; color: #555;">Click to fetch articles from RSS feeds.</p>
+<div class="dashboard-container">
+    <div class="sidebar">
+        <div class="action-section" style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #eee;">
+            <h2>Article Actions</h2>
+            <button id="fetchArticlesBtn" style="background-color: #3498db; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 16px;">Fetch New Articles</button>
+            <div class="loader" id="fetchLoader" style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: none; margin-left: 10px;"></div>
+            <div class="status-area" id="fetchStatus" style="margin-top: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background-color: #fdfdfd; min-height: 40px;">
+                <p class="status-info" style="margin:0; color: #555;">Click to fetch articles from RSS feeds.</p>
+            </div>
+            <br>
+            <button id="triageArticlesBtn" style="background-color: #3498db; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 16px; margin-top:10px;">Triage New Articles (LLM Analysis)</button>
+            <div class="loader" id="triageLoader" style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: none; margin-left: 10px;"></div>
+            <div class="status-area" id="triageStatus" style="margin-top: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background-color: #fdfdfd; min-height: 40px;">
+                <p class="status-info" style="margin:0; color: #555;">Click to perform LLM triage analysis.</p>
+            </div>
         </div>
-        <br>
-        <button id="triageArticlesBtn" style="background-color: #3498db; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 16px; margin-top:10px;">Triage New Articles (LLM Analysis)</button>
-        <div class="loader" id="triageLoader" style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: none; margin-left: 10px;"></div>
-        <div class="status-area" id="triageStatus" style="margin-top: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background-color: #fdfdfd; min-height: 40px;">
-            <p class="status-info" style="margin:0; color: #555;">Click to perform LLM triage analysis.</p>
+
+        <!-- Advanced Article Analysis Section -->
+        <div class="articles-container" style="margin-top: 20px;"> {/* Ensure this container itself doesn't add conflicting styles */}
+            <h2>Advanced Article Analysis</h2>
+            <form id="analysisForm"> {/* Removed inline style, will be handled by CSS */}
+                <label for="articleIdInput" style="margin-bottom: 5px; display: block;"><strong>Article ID:</strong></label>
+                <input type="text" id="articleIdInput" name="article_id" placeholder="Enter Article ID"> {/* Removed inline style */}
+                <button type="button" onclick="triggerDeepAnalysis()">Run Deep Analysis</button> {/* Removed inline style */}
+                <button type="button" onclick="triggerComparativeAnalysis()">Run Comparative Analysis</button> {/* Removed inline style */}
+            </form>
+            <div id="analysisResult" style="background: #f8f9fa; border-radius: 6px; padding: 16px; min-height: 40px; margin-bottom: 10px; word-wrap: break-word;"></div>
+            <div style="margin-top: 10px;">
+                <a href="/docs#tag/Articles" class="api-link" target="_blank">API Docs: Article Analysis Endpoints →</a>
+            </div>
         </div>
     </div>
 
-    <div class="stats-container">
-        <div class="stats-card">
-            <div class="stat-label">Total Articles</div>
-            <div class="stat-value">{{ total_articles }}</div>
-        </div>
-        <div class="stats-card">
-            <div class="stat-label">Storage Size</div>
-            <div class="stat-value">{{ storage_size_mb }} MB</div>
-        </div>
-        <div class="stats-card">
-            <div class="stat-label">Data Size</div>
-            <div class="stat-value">{{ data_size_mb }} MB</div>
-        </div>
-        <!-- New: LLM Analysis Stats -->
-        <div class="stats-card">
-            <div class="stat-label">Triaged (LLM)</div>
-            <div class="stat-value">{{ triaged_count }}</div>
-        </div>
-        <div class="stats-card">
-            <div class="stat-label">Requires Deep Analysis</div>
-            <div class="stat-value">{{ requires_deep_count }}</div>
-        </div>
-        <div class="stats-card">
-            <div class="stat-label">Deep Analysis Done</div>
-            <div class="stat-value">{{ deep_analysis_done_count }}</div>
-        </div>
-        <div class="stats-card">
-            <div class="stat-label">Not Analyzed</div>
-            <div class="stat-value">{{ not_analyzed_count }}</div>
-        </div>
-    </div>
-    <div class="chart-container">
-        <!-- Analysis Status Pie Chart -->
-        <div class="chart-card full-width">
-            <h3>Article Analysis Status Distribution</h3>
-            <canvas id="analysisStatusChart"></canvas>
-            <div class="chart-note">Shows the distribution of articles by LLM analysis status.</div>
-        </div>
-    </div>
+    <div class="main-content">
+        <div class="graphs-column">
+            <!-- Active Filters Display Area -->
+            <div id="active-filters-container" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div id="active-filters-display" style="padding: 10px; background-color: #e9e9e9; border-radius: 4px; flex-grow: 1;">
+                    <h4 style="margin: 0 0 5px 0; font-size: 0.9em;">Active Filters:</h4>
+                    <span id="filters-list" style="font-size: 0.85em;">None</span>
+                </div>
+                <button id="clear-filters-btn" style="padding: 8px 15px; background-color: #d9534f; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 15px;">Clear All Filters</button>
+            </div>
+
+            <div class="stats-container">
+                <div class="stats-card">
+                    <div class="stat-label">Total Articles</div>
+                    <div class="stat-value">{{ total_articles }}</div>
+                </div>
+                <div class="stats-card">
+                    <div class="stat-label">Storage Size</div>
+                    <div class="stat-value">{{ storage_size_mb }} MB</div>
+                </div>
+                <div class="stats-card">
+                    <div class="stat-label">Data Size</div>
+                    <div class="stat-value">{{ data_size_mb }} MB</div>
+                </div>
+                <!-- New: LLM Analysis Stats -->
+                <div class="stats-card">
+                    <div class="stat-label">Triaged (LLM)</div>
+                    <div class="stat-value">{{ triaged_count }}</div>
+                </div>
+                <div class="stats-card">
+                    <div class="stat-label">Requires Deep Analysis</div>
+                    <div class="stat-value">{{ requires_deep_count }}</div>
+                </div>
+                <div class="stats-card">
+                    <div class="stat-label">Deep Analysis Done</div>
+                    <div class="stat-value">{{ deep_analysis_done_count }}</div>
+                </div>
+                <div class="stats-card">
+                    <div class="stat-label">Not Analyzed</div>
+                    <div class="stat-value">{{ not_analyzed_count }}</div>
+                </div>
+            </div>
+            <div class="chart-container">
+                <!-- Analysis Status Pie Chart -->
+                <div class="chart-card full-width"> {/* This full-width might need review in new layout context */}
+                    <h3>Article Analysis Status Distribution</h3>
+                    <canvas id="analysisStatusChart"></canvas>
+                    <div class="chart-note">Shows the distribution of articles by LLM analysis status.</div>
+                </div>
+            </div>
+
+            <script>
+                // Render the analysis status pie chart
+            </script>
+            
+            <div class="chart-container">
+                <div class="chart-card">
+                    <h2>Articles by Source</h2>
+                    <canvas id="sourceChart"></canvas>
+                    <a href="/api/db/articles?aggregate=source_name" class="api-link">View API data →</a>
+                </div>
+                <div class="chart-card">
+                    <h2>Articles by Category</h2>
+                    <canvas id="categoryChart"></canvas>
+                    <a href="/api/db/articles?aggregate=llm_category" class="api-link">View API data →</a>
+                </div>
+            </div>
+            
+            <!-- New visualizations -->
+            <div class="chart-container">
+                <!-- 1. Sentiment Analysis Chart -->
+                <div class="chart-card">
+                    <h2>Article Sentiment Distribution</h2>
+                    <canvas id="sentimentChart"></canvas>
+                    <a href="/api/db/articles?aggregate=llm_sentiment" class="api-link">View API data →</a>
+                    <div id="sentimentArticlesDisplayArea">
+                        <!-- Articles will be displayed here -->
+                    </div>
+                </div>
+                
+                <!-- 6. Deep Analysis Requirements -->
+                <div class="chart-card">
+                    <h2>Articles Requiring Deep Analysis</h2>
+                    <canvas id="deepAnalysisRequiredChart"></canvas>
+                    <a href="/api/db/articles?aggregate=llm_requires_deep_analysis" class="api-link">View API data →</a>
+                </div>
+            </div>
+            
+            <!-- Timeline Chart -->
+            <div class="chart-container">
+                <!-- 2. Publication Timeline -->
+                <div class="chart-card full-width"> {/* This full-width might need review */}
+                    <h2>Publication Timeline</h2>
+                    <canvas id="timelineChart"></canvas>
+                    <a href="/api/db/articles?aggregate=publication_date" class="api-link">View API data →</a>
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <!-- 4. Key Claims Analysis -->
+                <div class="chart-card">
+                    <h2>Top Key Claims</h2>
+                    <canvas id="keyClaimsChart"></canvas>
+                    <a href="/api/db/articles?aggregate=llm_key_claim" class="api-link">View API data →</a>
+                </div>
+                
+                <!-- 5. Source Reliability Metrics -->
+                <div class="chart-card">
+                    <h2>Source Reliability Scores (%)</h2>
+                    <canvas id="reliabilityChart"></canvas>
+                    <p class="chart-note">Higher score = fewer articles requiring deep analysis</p>
+                </div>
+            </div>
+            
+            <!-- Deep Analysis Stats Card -->
+            <div class="stats-card full-width" style="margin-top: 20px;"> {/* This full-width might need review */}
+                <div class="stat-label">Articles with Deep Analysis</div>
+                <div class="stat-value">{{ deep_analysis_count }}</div>
+                <div class="stat-label">of {{ total_articles }} total articles</div>
+            </div>
+        </div> {/* End .graphs-column */}
+
+        <div class="articles-column">
+            <div id="articles-list-placeholder">
+                <h2>News Articles</h2>
+                <p>Articles will be displayed here based on graph selections.</p>
+            </div>
+            <!--
+            <div class="articles-container">
+                <h2>Recent Articles</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Source</th>
+                            <th>Category</th>
+                            <th>Publication Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for article in articles %}
+                        <tr>
+                            <td>
+                                <a href="{{ article.url }}" target="_blank">{{ article.title }}</a>
+                                {% if article.summary %}
+                                <div class="article-summary">{{ article.summary }}</div>
+                                {% endif %}
+                            </td>
+                            <td>{{ article.source_name }}</td>
+                            <td>{{ article.llm_category or "Uncategorized" }}</td>
+                            <td>{{ article.publication_date or article.fetched_date }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <div class="pagination">
+                    <a href="#">&laquo;</a>
+                    <a href="#" class="active">1</a>
+                    <a href="#">2</a>
+                    <a href="#">3</a>
+                    <a href="#">&raquo;</a>
+                </div>
+                <a href="/api/db/articles" class="api-link">View all articles API data →</a>
+            </div>
+
+            <div class="articles-container full-width">
+                <h2>Raw Database View (All Articles)</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Title</th>
+                            <th>URL</th>
+                            <th>Source Name</th>
+                            <th>Fetched Date</th>
+                            <th>Publication Date</th>
+                            <th>LLM Category</th>
+                            <th>LLM Sentiment</th>
+                            <th>LLM Key Claim</th>
+                            <th>LLM Requires Deep Analysis</th>
+                            <!-- Add other headers as needed -->
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for article in all_articles_for_raw_view %}
+                        <tr>
+                            <td>{{ article._id }}</td>
+                            <td>{{ article.title }}</td>
+                            <td><a href="{{ article.url }}" target="_blank">{{ article.url }}</a></td>
+                            <td>{{ article.source_name }}</td>
+                            <td>{{ article.fetched_date }}</td>
+                            <td>{{ article.publication_date }}</td>
+                            <td>{{ article.llm_category }}</td>
+                            <td>{{ article.llm_sentiment }}</td>
+                            <td>{{ article.llm_key_claim }}</td>
+                            <td>{{ article.llm_requires_deep_analysis }}</td>
+                            <!-- Populate other cells as needed -->
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <div class="pagination">
+                    {% if raw_page > 1 %}
+                        <a href="?raw_page=1&raw_limit={{ raw_limit }}">&laquo; First</a>
+                        <a href="?raw_page={{ raw_page - 1 }}&raw_limit={{ raw_limit }}">&lsaquo; Prev</a>
+                    {% else %}
+                        <span class="active">&laquo; First</span>
+                        <span class="active">&lsaquo; Prev</span>
+                    {% endif %}
+
+                    {# Show up to 5 page numbers around the current page #}
+                    {% set start_page = raw_page - 2 if raw_page - 2 > 0 else 1 %}
+                    {% set end_page = raw_page + 2 if raw_page + 2 <= raw_total_pages else raw_total_pages %}
+                    {% for p in range(start_page, end_page + 1) %}
+                        {% if p == raw_page %}
+                            <span class="active">{{ p }}</span>
+                        {% else %}
+                            <a href="?raw_page={{ p }}&raw_limit={{ raw_limit }}">{{ p }}</a>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if raw_page < raw_total_pages %}
+                        <a href="?raw_page={{ raw_page + 1 }}&raw_limit={{ raw_limit }}">Next &rsaquo;</a>
+                        <a href="?raw_page={{ raw_total_pages }}&raw_limit={{ raw_limit }}">Last &raquo;</a>
+                    {% else %}
+                        <span class="active">Next &rsaquo;</span>
+                        <span class="active">Last &raquo;</span>
+                    {% endif %}
+                    <span style="margin-left: 16px; color: #888;">Page {{ raw_page }} of {{ raw_total_pages }} ({{ raw_total_articles }} articles)</span>
+                </div>
+            </div>
+            -->
+        </div> {/* End .articles-column */}
+    </div> {/* End .main-content */}
+</div> {/* End .dashboard-container */}
+
 
     <script>
         // Render the analysis status pie chart
         document.addEventListener('DOMContentLoaded', function() {
+            // Load articles into the right column
+            loadArticles(activeFilters); // Pass activeFilters
+            updateActiveFiltersDisplay(); // Initial display update
+
+            // Clear All Filters Button Listener
+            document.getElementById('clear-filters-btn').addEventListener('click', async () => {
+                activeFilters = {}; // Reset filters
+                await loadArticles(activeFilters); // Reload articles
+                updateActiveFiltersDisplay(); // Update display
+                // Optionally, reset chart visual cues here if implemented
+            });
+
             const ctx = document.getElementById('analysisStatusChart').getContext('2d');
             const data = {
                 labels: {{ analysis_status_distribution.keys() | list | tojson }},
@@ -277,192 +618,176 @@
         });
     </script>
 
-    <div class="chart-container">
-        <div class="chart-card">
-            <h2>Articles by Source</h2>
-            <canvas id="sourceChart"></canvas>
-            <a href="/api/db/articles?aggregate=source_name" class="api-link">View API data →</a>
-        </div>
-        <div class="chart-card">
-            <h2>Articles by Category</h2>
-            <canvas id="categoryChart"></canvas>
-            <a href="/api/db/articles?aggregate=llm_category" class="api-link">View API data →</a>
-        </div>
-    </div>
-    
-    <!-- New visualizations -->
-    <div class="chart-container">
-        <!-- 1. Sentiment Analysis Chart -->
-        <div class="chart-card">
-            <h2>Article Sentiment Distribution</h2>
-            <canvas id="sentimentChart"></canvas>
-            <a href="/api/db/articles?aggregate=llm_sentiment" class="api-link">View API data →</a>
-            <div id="sentimentArticlesDisplayArea">
-                <!-- Articles will be displayed here -->
-            </div>
-        </div>
-        
-        <!-- 6. Deep Analysis Requirements -->
-        <div class="chart-card">
-            <h2>Articles Requiring Deep Analysis</h2>
-            <canvas id="deepAnalysisRequiredChart"></canvas>
-            <a href="/api/db/articles?aggregate=llm_requires_deep_analysis" class="api-link">View API data →</a>
-        </div>
-    </div>
-    
-    <!-- Timeline Chart -->
-    <div class="chart-container">
-        <!-- 2. Publication Timeline -->
-        <div class="chart-card full-width">
-            <h2>Publication Timeline</h2>
-            <canvas id="timelineChart"></canvas>
-            <a href="/api/db/articles?aggregate=publication_date" class="api-link">View API data →</a>
-        </div>
-    </div>
-    
-    <div class="chart-container">
-        <!-- 4. Key Claims Analysis -->
-        <div class="chart-card">
-            <h2>Top Key Claims</h2>
-            <canvas id="keyClaimsChart"></canvas>
-            <a href="/api/db/articles?aggregate=llm_key_claim" class="api-link">View API data →</a>
-        </div>
-        
-        <!-- 5. Source Reliability Metrics -->
-        <div class="chart-card">
-            <h2>Source Reliability Scores (%)</h2>
-            <canvas id="reliabilityChart"></canvas>
-            <p class="chart-note">Higher score = fewer articles requiring deep analysis</p>
-        </div>
-    </div>
-    
-    <!-- Deep Analysis Stats Card -->
-    <div class="stats-card full-width">
-        <div class="stat-label">Articles with Deep Analysis</div>
-        <div class="stat-value">{{ deep_analysis_count }}</div>
-        <div class="stat-label">of {{ total_articles }} total articles</div>
-    </div>
-
-    <div class="articles-container">
-        <h2>Recent Articles</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Title</th>
-                    <th>Source</th>
-                    <th>Category</th>
-                    <th>Publication Date</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for article in articles %}
-                <tr>
-                    <td>
-                        <a href="{{ article.url }}" target="_blank">{{ article.title }}</a>
-                        {% if article.summary %}
-                        <div class="article-summary">{{ article.summary }}</div>
-                        {% endif %}
-                    </td>
-                    <td>{{ article.source_name }}</td>
-                    <td>{{ article.llm_category or "Uncategorized" }}</td>
-                    <td>{{ article.publication_date or article.fetched_date }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <div class="pagination">
-            <a href="#">&laquo;</a>
-            <a href="#" class="active">1</a>
-            <a href="#">2</a>
-            <a href="#">3</a>
-            <a href="#">&raquo;</a>
-        </div>
-        <a href="/api/db/articles" class="api-link">View all articles API data →</a>
-    </div>
-
-    <div class="articles-container full-width">
-        <h2>Raw Database View (All Articles)</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Title</th>
-                    <th>URL</th>
-                    <th>Source Name</th>
-                    <th>Fetched Date</th>
-                    <th>Publication Date</th>
-                    <th>LLM Category</th>
-                    <th>LLM Sentiment</th>
-                    <th>LLM Key Claim</th>
-                    <th>LLM Requires Deep Analysis</th>
-                    <!-- Add other headers as needed -->
-                </tr>
-            </thead>
-            <tbody>
-                {% for article in all_articles_for_raw_view %}
-                <tr>
-                    <td>{{ article._id }}</td>
-                    <td>{{ article.title }}</td>
-                    <td><a href="{{ article.url }}" target="_blank">{{ article.url }}</a></td>
-                    <td>{{ article.source_name }}</td>
-                    <td>{{ article.fetched_date }}</td>
-                    <td>{{ article.publication_date }}</td>
-                    <td>{{ article.llm_category }}</td>
-                    <td>{{ article.llm_sentiment }}</td>
-                    <td>{{ article.llm_key_claim }}</td>
-                    <td>{{ article.llm_requires_deep_analysis }}</td>
-                    <!-- Populate other cells as needed -->
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <div class="pagination">
-            {% if raw_page > 1 %}
-                <a href="?raw_page=1&raw_limit={{ raw_limit }}">&laquo; First</a>
-                <a href="?raw_page={{ raw_page - 1 }}&raw_limit={{ raw_limit }}">&lsaquo; Prev</a>
-            {% else %}
-                <span class="active">&laquo; First</span>
-                <span class="active">&lsaquo; Prev</span>
-            {% endif %}
-
-            {# Show up to 5 page numbers around the current page #}
-            {% set start_page = raw_page - 2 if raw_page - 2 > 0 else 1 %}
-            {% set end_page = raw_page + 2 if raw_page + 2 <= raw_total_pages else raw_total_pages %}
-            {% for p in range(start_page, end_page + 1) %}
-                {% if p == raw_page %}
-                    <span class="active">{{ p }}</span>
-                {% else %}
-                    <a href="?raw_page={{ p }}&raw_limit={{ raw_limit }}">{{ p }}</a>
-                {% endif %}
-            {% endfor %}
-
-            {% if raw_page < raw_total_pages %}
-                <a href="?raw_page={{ raw_page + 1 }}&raw_limit={{ raw_limit }}">Next &rsaquo;</a>
-                <a href="?raw_page={{ raw_total_pages }}&raw_limit={{ raw_limit }}">Last &raquo;</a>
-            {% else %}
-                <span class="active">Next &rsaquo;</span>
-                <span class="active">Last &raquo;</span>
-            {% endif %}
-            <span style="margin-left: 16px; color: #888;">Page {{ raw_page }} of {{ raw_total_pages }} ({{ raw_total_articles }} articles)</span>
-        </div>
-    </div>
-
-    <!-- Advanced Article Analysis Section -->
-    <div class="articles-container full-width" style="margin-top: 40px;">
-        <h2>Advanced Article Analysis</h2>
-        <form id="analysisForm" style="margin-bottom: 20px;">
-            <label for="articleIdInput"><strong>Article ID:</strong></label>
-            <input type="text" id="articleIdInput" name="article_id" placeholder="Enter Article ID" style="margin: 0 10px; padding: 4px 8px;">
-            <button type="button" onclick="triggerDeepAnalysis()">Run Deep Analysis</button>
-            <button type="button" onclick="triggerComparativeAnalysis()">Run Comparative Analysis</button>
-        </form>
-        <div id="analysisResult" style="background: #f8f9fa; border-radius: 6px; padding: 16px; min-height: 40px; margin-bottom: 10px;"></div>
-        <div style="margin-top: 10px;">
-            <a href="/docs#tag/Articles" class="api-link" target="_blank">API Docs: Article Analysis Endpoints →</a>
-        </div>
-    </div>
-
     <script>
+    let activeFilters = {}; // Global object to store active filters
+
+    // Function to update the active filters display
+    function updateActiveFiltersDisplay() {
+        const filtersListSpan = document.getElementById('filters-list');
+        if (Object.keys(activeFilters).length === 0) {
+            filtersListSpan.textContent = 'None';
+        } else {
+            let filterStrings = [];
+            for (const key in activeFilters) {
+                // Make keys more readable
+                let readableKey = key.replace('llm_', '').replace('_', ' ');
+                readableKey = readableKey.charAt(0).toUpperCase() + readableKey.slice(1);
+                if (key === 'source_name') readableKey = 'Source';
+                 if (key === 'llm_requires_deep_analysis' && activeFilters[key] === 'true') {
+                     filterStrings.push(`${readableKey}`); // Just "Requires Deep Analysis"
+                 } else if (key === 'llm_requires_deep_analysis' && activeFilters[key] === 'false') {
+                     filterStrings.push(`Not ${readableKey}`); // "Not Requires Deep Analysis"
+                 }
+                else {
+                    filterStrings.push(`${readableKey}: ${activeFilters[key]}`);
+                }
+            }
+            filtersListSpan.textContent = filterStrings.join('; ');
+        }
+    }
+
+    // Generic chart click handler
+    async function handleChartClick(event, elements, chartInstance, filterTypeKey) {
+        if (elements.length > 0) {
+            const clickedIndex = elements[0].index;
+            const clickedLabel = chartInstance.data.labels[clickedIndex];
+
+            // For boolean filters like 'llm_requires_deep_analysis', convert common labels to boolean strings
+            let filterValue = clickedLabel;
+            if (filterTypeKey === 'llm_requires_deep_analysis') {
+                if (clickedLabel.toLowerCase() === 'requires deep analysis' || clickedLabel.toLowerCase() === 'true') {
+                    filterValue = 'true';
+                } else if (clickedLabel.toLowerCase() === 'standard analysis' || clickedLabel.toLowerCase() === 'false') {
+                    filterValue = 'false';
+                }
+                // If it's already 'true' or 'false' from the data, it will be used as is.
+            }
+
+
+            if (activeFilters[filterTypeKey] === filterValue) {
+                delete activeFilters[filterTypeKey]; // Toggle: deselect if already selected
+                // Optionally, reset chart visual cues, e.g., remove border highlight
+                elements[0].element.options.borderColor = chartInstance.data.datasets[elements[0].datasetIndex].borderColor[clickedIndex]; // Reset to original
+                elements[0].element.options.borderWidth = chartInstance.data.datasets[elements[0].datasetIndex].borderWidth[clickedIndex]; // Reset to original
+
+            } else {
+                // Before setting a new filter, reset any visual cues on previously selected segments for this chart
+                const dataset = chartInstance.data.datasets[elements[0].datasetIndex];
+                dataset.data.forEach((_, index) => {
+                    // This is tricky as chart.js elements don't directly expose their options for easy reset
+                    // For simplicity, we won't try to reset borders of *other* segments here.
+                    // A more robust solution might involve re-rendering or direct manipulation if Chart.js API allows.
+                });
+
+                activeFilters[filterTypeKey] = filterValue; // Select/update filter
+                // Optionally, add visual cue, e.g., highlight border
+                // elements[0].element.options.borderColor = 'rgba(0, 0, 0, 1)'; // Example: Black border
+                // elements[0].element.options.borderWidth = 3; // Example: Thicker border
+            }
+            chartInstance.update(); // Re-render chart to apply visual cues if any changed in options
+
+            // If sentiment filter is applied globally, clear the specific sentiment display area
+            if (filterTypeKey === 'llm_sentiment' || activeFilters.hasOwnProperty('llm_sentiment')) {
+                 const specificSentimentArea = document.getElementById('sentimentArticlesDisplayArea');
+                 specificSentimentArea.innerHTML = '<p class="message">Global sentiment filter active. Articles below are filtered accordingly.</p>';
+            }
+
+
+            await loadArticles(activeFilters);
+            updateActiveFiltersDisplay(); // Update display after filter change
+        }
+    }
+
+
+    // Function to load articles into the articles column
+    async function loadArticles(filters = {}) { // Renamed filterParams to filters for clarity
+        const placeholder = document.getElementById('articles-list-placeholder');
+        placeholder.innerHTML = '<p>Loading articles...</p>'; // Show loading message
+
+        let baseUrl = '/api/db/articles';
+        const queryParams = new URLSearchParams();
+        
+        // Add limit if not present in filters, otherwise use limit from filters
+        if (!filters.limit) {
+            queryParams.append('limit', '20');
+        }
+
+        for (const key in filters) {
+            if (filters.hasOwnProperty(key)) {
+                queryParams.append(key, filters[key]);
+            }
+        }
+        
+        const queryString = queryParams.toString();
+        let url = `${baseUrl}?${queryString}`;
+
+
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+
+            if (data.articles && data.articles.length > 0) {
+                placeholder.innerHTML = ''; // Clear loading message
+                const ul = document.createElement('ul');
+                ul.className = 'article-list-ul';
+
+                data.articles.forEach(article => {
+                    const li = document.createElement('li');
+                    li.className = 'article-list-li';
+
+                    const titleDiv = document.createElement('div');
+                    titleDiv.className = 'article-title';
+                    const titleLink = document.createElement('a');
+                    titleLink.href = article.url;
+                    titleLink.textContent = article.title || 'No Title';
+                    titleLink.target = '_blank'; // Open in new tab
+                    titleDiv.appendChild(titleLink);
+
+                    const metaDiv = document.createElement('div');
+                    metaDiv.className = 'article-meta';
+                    const sourceSpan = document.createElement('span');
+                    sourceSpan.textContent = `Source: ${article.source_name || 'N/A'}`;
+                    
+                    const dateSpan = document.createElement('span');
+                    // Use publication_date if available, otherwise fetched_date
+                    let displayDate = 'No Date';
+                    if (article.publication_date) {
+                        displayDate = new Date(article.publication_date).toLocaleDateString();
+                    } else if (article.fetched_date) {
+                        displayDate = new Date(article.fetched_date).toLocaleDateString() + " (fetched)";
+                    }
+                    dateSpan.textContent = ` | Date: ${displayDate}`;
+
+                    metaDiv.appendChild(sourceSpan);
+                    metaDiv.appendChild(dateSpan);
+
+                    li.appendChild(titleDiv);
+                    li.appendChild(metaDiv);
+                    ul.appendChild(li);
+                });
+                placeholder.appendChild(ul);
+
+                // Basic pagination (can be expanded later)
+                if (data.pages && data.pages > 1) {
+                    const paginationDiv = document.createElement('div');
+                    paginationDiv.className = 'pagination'; // Use existing pagination styles if suitable
+                    // Placeholder for more advanced pagination
+                    paginationDiv.innerHTML = `<p>Page ${data.page} of ${data.pages}. (Pagination UI to be implemented)</p>`;
+                    placeholder.appendChild(paginationDiv);
+                }
+
+            } else {
+                placeholder.innerHTML = '<p>No articles found.</p>';
+            }
+        } catch (error) {
+            console.error('Error loading articles:', error);
+            placeholder.innerHTML = `<p>Error loading articles: ${error.message}</p>`;
+        }
+    }
+
     async function triggerDeepAnalysis() {
         const articleId = document.getElementById('articleIdInput').value.trim();
         if (!articleId) {
@@ -507,7 +832,9 @@
     </script>
 
     <script>
-        // Common chart colors
+        // Common chart colors and activeFilters should be in a scope accessible by chart configs
+        // let activeFilters = {}; // Moved to the script block above loadArticles
+
         const chartColors = {
             backgroundColor: [
                 'rgba(255, 99, 132, 0.6)',
@@ -534,7 +861,7 @@
         const sourceData = {{ sources.values()|list|tojson }};
         
         const sourceCtx = document.getElementById('sourceChart').getContext('2d');
-        new Chart(sourceCtx, {
+        const sourceChartInstance = new Chart(sourceCtx, { // Store instance
             type: 'bar',
             data: {
                 labels: sourceLabels,
@@ -552,6 +879,9 @@
                     y: {
                         beginAtZero: true
                     }
+                },
+                onClick: (event, elements) => {
+                    handleChartClick(event, elements, sourceChartInstance, 'source_name');
                 }
             }
         });
@@ -561,7 +891,7 @@
         const categoryData = {{ categories.values()|list|tojson if categories else []|tojson }};
         
         const categoryCtx = document.getElementById('categoryChart').getContext('2d');
-        new Chart(categoryCtx, {
+        const categoryChartInstance = new Chart(categoryCtx, { // Store instance
             type: 'pie',
             data: {
                 labels: categoryLabels.length ? categoryLabels : ['No categorized articles'],
@@ -578,6 +908,9 @@
                     legend: {
                         position: 'right'
                     }
+                },
+                onClick: (event, elements) => {
+                    handleChartClick(event, elements, categoryChartInstance, 'llm_category');
                 }
             }
         });
@@ -605,56 +938,17 @@
                         position: 'right'
                     }
                 },
-                onClick: async (event, elements) => {
-                    const displayArea = document.getElementById('sentimentArticlesDisplayArea');
-                    // Clear previous content and show loading message
-                    displayArea.innerHTML = '<p class="message">Loading articles...</p>'; 
+                onClick: (event, elements) => {
+                    // If a global sentiment filter is active from another click, this specific display area might be confusing.
+                    // The handleChartClick function now clears this area if 'llm_sentiment' is in activeFilters.
+                    // This chart will now also participate in global filtering.
+                    handleChartClick(event, elements, sentimentChartInstance, 'llm_sentiment');
 
-                    if (elements.length > 0) {
-                        const chartElement = elements[0];
-                        const sentimentLabel = sentimentChartInstance.data.labels[chartElement.index];
-                        
-                        if (!sentimentLabel || sentimentLabel === 'No sentiment data') {
-                            displayArea.innerHTML = '<p class="message">No specific sentiment selected or data available.</p>';
-                            return;
-                        }
-
-                        // Add title before fetching
-                        let titleHtml = `<h3>Articles for ${sentimentLabel}</h3>`;
-                        
-                        const encodedSentimentLabel = encodeURIComponent(sentimentLabel);
-                        const apiUrl = `/api/db/articles_by_sentiment/${encodedSentimentLabel}`;
-
-                        try {
-                            const response = await fetch(apiUrl);
-                            if (!response.ok) {
-                                throw new Error(`API request failed with status ${response.status}`);
-                            }
-                            const data = await response.json();
-                            
-                            if (data.articles && data.articles.length > 0) {
-                                let articlesHtml = '<ul>';
-                                data.articles.forEach(article => {
-                                    articlesHtml += `<li><a href="${article.url}" target="_blank">${article.title}</a> <span class="source-name">(Source: ${article.source_name})</span></li>`;
-                                });
-                                articlesHtml += '</ul>';
-                                displayArea.innerHTML = titleHtml + articlesHtml; // Prepend title
-                            } else if (data.articles && data.articles.length === 0) {
-                                displayArea.innerHTML = titleHtml + '<p class="message">No articles found for this sentiment.</p>';
-                            } else if (data.error) {
-                                 displayArea.innerHTML = titleHtml + `<p class="message">Error: ${data.error}.</p>`;
-                            } 
-                            else {
-                                 displayArea.innerHTML = titleHtml + `<p class="message">Error: Unexpected response format from server.</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
-                            }
-                        } catch (error) {
-                            console.error('Error fetching articles by sentiment:', error);
-                            displayArea.innerHTML = titleHtml + `<p class="message">Error fetching articles: ${error.message}</p>`;
-                        }
-                    } else {
-                        // Click was not on a segment - clear the area or show a generic message
-                        displayArea.innerHTML = '<p class="message">Click on a sentiment segment to see articles.</p>';
-                    }
+                    // The old functionality of displaying articles directly in sentimentArticlesDisplayArea
+                    // is now superseded by the global filter and loadArticles,
+                    // but we can keep the specific display area update if no global filter is set for sentiment.
+                    // However, the prompt implies a unified filtering.
+                    // For now, the specific display area will be managed by handleChartClick.
                 }
             }
         });
@@ -692,7 +986,7 @@
         const keyClaimsData = {{ key_claims.values()|list|tojson if key_claims else []|tojson }};
         
         const keyClaimsCtx = document.getElementById('keyClaimsChart').getContext('2d');
-        new Chart(keyClaimsCtx, {
+        const keyClaimsChartInstance = new Chart(keyClaimsCtx, { // Store instance
             type: 'horizontalBar', // Horizontal bar for better readability of claims
             data: {
                 labels: keyClaimsLabels.length ? keyClaimsLabels : ['No key claims data'],
@@ -711,6 +1005,9 @@
                     x: {
                         beginAtZero: true
                     }
+                },
+                onClick: (event, elements) => {
+                    handleChartClick(event, elements, keyClaimsChartInstance, 'llm_key_claim');
                 }
             }
         });
@@ -748,7 +1045,7 @@
         const deepAnalysisData = {{ deep_analysis_required.values()|list|tojson if deep_analysis_required else []|tojson }};
         
         const deepAnalysisRequiredCtx = document.getElementById('deepAnalysisRequiredChart').getContext('2d');
-        new Chart(deepAnalysisRequiredCtx, {
+        const deepAnalysisRequiredChartInstance = new Chart(deepAnalysisRequiredCtx, { // Store instance
             type: 'pie',
             data: {
                 labels: deepAnalysisLabels.length ? deepAnalysisLabels : ['No deep analysis data'],
@@ -771,6 +1068,9 @@
                     legend: {
                         position: 'right'
                     }
+                },
+                onClick: (event, elements) => {
+                    handleChartClick(event, elements, deepAnalysisRequiredChartInstance, 'llm_requires_deep_analysis');
                 }
             }
         });
