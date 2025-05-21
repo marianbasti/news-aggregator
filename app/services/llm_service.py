@@ -116,7 +116,7 @@ class LLMService:
         content: str, 
         prompt_template: str,
         model: Optional[str] = None,
-        max_tokens: int = 500,
+        max_tokens: int = 5000,
         temperature: float = 0.3,
         json_schema: Optional[Dict[str, Any]] = None
     ) -> Optional[Dict[str, Any]]:
