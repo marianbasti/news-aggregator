@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} - News Aggregator</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        .container {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #2c3e50;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .action-section {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        .status-area {
+            margin-top: 15px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #fdfdfd;
+            min-height: 50px;
+            white-space: pre-wrap; /* Preserve formatting of status messages */
+        }
+        .status-area p {
+            margin: 5px 0;
+        }
+        .status-success {
+            color: green;
+        }
+        .status-error {
+            color: red;
+        }
+        .status-info {
+            color: #555;
+        }
+        .loader {
+            border: 4px solid #f3f3f3; /* Light grey */
+            border-top: 4px solid #3498db; /* Blue */
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: none; /* Hidden by default */
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Admin Control Panel</h1>
+
+        <div class="action-section">
+            <h2>Article Management</h2>
+            <button id="fetchArticlesBtn">Fetch New Articles</button>
+            <div class="loader" id="fetchLoader"></div>
+            <div class="status-area" id="fetchStatus">
+                <p class="status-info">Click the button to fetch articles from RSS feeds.</p>
+            </div>
+            <br> 
+            <button id="triageArticlesBtn">Triage New Articles (LLM Analysis)</button>
+            <div class="loader" id="triageLoader"></div>
+            <div class="status-area" id="triageStatus">
+                <p class="status-info">Click the button to perform LLM triage analysis on new articles.</p>
+            </div>
+        </div>
+
+        <div class="action-section">
+            <h2>System Status & Monitoring</h2>
+            <p><i>(More monitoring features can be added here, e.g., task queues, DB health, logs)</i></p>
+            <button id="checkHealthBtn">Check API Health</button>
+            <div class="loader" id="healthLoader"></div>
+            <div class="status-area" id="healthStatus">
+                <p class="status-info">Click to check system health.</p>
+            </div>
+        </div>
+        
+        <div class="action-section">
+            <h2>Database Dashboard</h2>
+            <p><a href="/api/db/dashboard" target="_blank">Open Database Dashboard</a></p>
+        </div>
+
+    </div>
+
+    <script>
+        const fetchArticlesBtn = document.getElementById('fetchArticlesBtn');
+        const fetchStatusArea = document.getElementById('fetchStatus');
+        const fetchLoader = document.getElementById('fetchLoader');
+
+        const triageArticlesBtn = document.getElementById('triageArticlesBtn');
+        const triageStatusArea = document.getElementById('triageStatus');
+        const triageLoader = document.getElementById('triageLoader');
+
+        const checkHealthBtn = document.getElementById('checkHealthBtn');
+        const healthStatusArea = document.getElementById('healthStatus');
+        const healthLoader = document.getElementById('healthLoader');
+
+        async function makeApiCall(method, url, button, loader, statusArea) {
+            button.disabled = true;
+            loader.style.display = 'inline-block';
+            statusArea.innerHTML = '<p class="status-info">Processing...</p>';
+
+            try {
+                const response = await fetch(url, { method: method });
+                const data = await response.json();
+
+                if (response.ok) {
+                    statusArea.innerHTML = `<p class="status-success">Success:</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                } else {
+                    statusArea.innerHTML = `<p class="status-error">Error ${response.status}:</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                }
+            } catch (error) {
+                console.error('API call failed:', error);
+                statusArea.innerHTML = `<p class="status-error">Request Failed:</p><p>${error.message}</p>`;
+            } finally {
+                button.disabled = false;
+                loader.style.display = 'none';
+            }
+        }
+
+        fetchArticlesBtn.addEventListener('click', () => {
+            makeApiCall('POST', '/api/articles/fetch', fetchArticlesBtn, fetchLoader, fetchStatusArea);
+        });
+
+        triageArticlesBtn.addEventListener('click', () => {
+            makeApiCall('POST', '/api/articles/triage', triageArticlesBtn, triageLoader, triageStatusArea);
+        });
+
+        checkHealthBtn.addEventListener('click', () => {
+            makeApiCall('GET', '/health', checkHealthBtn, healthLoader, healthStatusArea);
+        });
+    </script>
+</body>
+</html>
