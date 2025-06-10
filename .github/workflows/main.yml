@@ -2,8 +2,8 @@ name: Daily News Fetch and Dataset Update
 
 on:
   schedule:
-    # Run daily at 6:00 AM UTC (adjust timezone as needed)
-    - cron: '0 9,16,23 * * *'
+    # Run at 8:00 AM, 4:00 PM, and 11:00 PM UTC
+    - cron: '0 8,16,23 * * *'
   workflow_dispatch: # Allow manual triggering
 
 env:
@@ -127,34 +127,39 @@ jobs:
       env:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
+        # Copy new articles to dataset repository
+        if [ -d "new_articles" ]; then
+          echo "Copying files to dataset repository..."
+          cp new_articles/* dataset_repo/ 2>/dev/null || true
+          ls -la new_articles/
+          echo "Files in dataset_repo after copy:"
+          ls -la dataset_repo/
+        fi
+        
         cd dataset_repo
         
         # Check if there are changes
         if [ -n "$(git status --porcelain)" ]; then
+          echo "Changes detected, committing..."
+          git status
+          
           # Add all files
           git add .
           
-          # Get article count for commit message
-          ARTICLE_COUNT=$(wc -l < news_articles.jsonl 2>/dev/null || echo "0")
-          NEW_ARTICLES=$(python -c "
-          import json
-          try:
-              with open('metadata.json', 'r') as f:
-                  data = json.load(f)
-                  print(data.get('new_articles_added', 0))
-          except:
-              print(0)
-          ")
+          # Get article count from the correct file
+          ARTICLE_COUNT=$(wc -l < articles.jsonl 2>/dev/null || echo "0")
           
           # Create commit message
-          git commit -m "Daily update: $(date -u '+%Y-%m-%d') - $ARTICLE_COUNT total articles ($NEW_ARTICLES new)"
+          git commit -m "Daily update: $(date -u '+%Y-%m-%d %H:%M UTC') - $ARTICLE_COUNT articles"
           
           # Push changes
           git push
           
-          echo "✅ Dataset updated successfully with $ARTICLE_COUNT total articles ($NEW_ARTICLES new)"
+          echo "✅ Dataset updated successfully with $ARTICLE_COUNT articles"
         else
           echo "ℹ️ No changes to commit"
+          echo "Current files in dataset repo:"
+          ls -la
         fi
 
     - name: Create workflow summary
@@ -163,43 +168,32 @@ jobs:
         echo "## Daily News Fetch Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         
-        # Check if dataset was updated
-        if [ -f "dataset_repo/metadata.json" ]; then
+        # Check if articles were fetched
+        if [ -f "new_articles/metadata.json" ]; then
           echo "✅ **Update successful**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           # Extract metadata
-          cd dataset_repo
           TOTAL_ARTICLES=$(python -c "
           import json
           try:
-              with open('metadata.json', 'r') as f:
+              with open('new_articles/metadata.json', 'r') as f:
                   data = json.load(f)
                   print(data.get('total_articles', 0))
-          except:
-              print(0)
-          ")
-          NEW_ARTICLES=$(python -c "
-          import json
-          try:
-              with open('metadata.json', 'r') as f:
-                  data = json.load(f)
-                  print(data.get('new_articles_added', 0))
           except:
               print(0)
           ")
           SOURCES_COUNT=$(python -c "
           import json
           try:
-              with open('metadata.json', 'r') as f:
+              with open('new_articles/metadata.json', 'r') as f:
                   data = json.load(f)
                   print(len(data.get('sources', [])))
           except:
               print(0)
           ")
           
-          echo "- **Total articles in dataset:** $TOTAL_ARTICLES" >> $GITHUB_STEP_SUMMARY
-          echo "- **New articles added:** $NEW_ARTICLES" >> $GITHUB_STEP_SUMMARY
+          echo "- **Articles fetched:** $TOTAL_ARTICLES" >> $GITHUB_STEP_SUMMARY
           echo "- **News sources:** $SOURCES_COUNT" >> $GITHUB_STEP_SUMMARY
           echo "- **Dataset repository:** [marianbasti/news-ar](https://huggingface.co/datasets/marianbasti/news-ar)" >> $GITHUB_STEP_SUMMARY
         else
