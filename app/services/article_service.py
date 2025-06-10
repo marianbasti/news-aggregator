@@ -1038,6 +1038,30 @@ async def perform_deep_article_analysis(article_id: str) -> Optional[Article]:
     
     return article # Return article, possibly unmodified if LLM client wasn't available
 
+async def perform_deep_analysis_for_all_required(limit: int = 100) -> dict:
+    """
+    Batch process: Perform deep analysis for all articles flagged as requiring deep analysis,
+    but which do not yet have deep analysis results.
+    """
+    collection = await get_article_collection()
+    query = {
+        "llm_requires_deep_analysis": True,
+        "$or": [
+            {"llm_deep_analysis_results": {"$exists": False}},
+            {"llm_deep_analysis_results": None}
+        ]
+    }
+    cursor = collection.find(query).limit(limit)
+    processed = 0
+    updated = 0
+    async for doc in cursor:
+        article_id = str(doc["_id"])
+        result = await perform_deep_article_analysis(article_id)
+        processed += 1
+        if result and getattr(result, "llm_deep_analysis_results", None):
+            updated += 1
+    return {"processed": processed, "deep_analyzed": updated}
+
 async def triage_new_articles(limit: int = 1000) -> Dict[str, int]:
     """
     Finds articles that haven't had initial triage analysis and performs it.
@@ -1717,3 +1741,23 @@ async def get_comparative_analysis_for_article(article_id: str) -> Optional[Dict
     except Exception as e:
         logger.error(f"Error retrieving comparative analysis for article {article_id}: {e}", exc_info=True)
         return None
+
+def calculate_source_reliability(articles: list) -> dict:
+    """
+    Calculate reliability score for each source as the percentage of articles
+    that do NOT require deep analysis.
+    """
+    from collections import defaultdict
+    source_stats = defaultdict(lambda: {"total": 0, "not_deep": 0})
+    for a in articles:
+        src = getattr(a, "source_name", None)
+        if not src:
+            continue
+        source_stats[src]["total"] += 1
+        if not getattr(a, "llm_requires_deep_analysis", False):
+            source_stats[src]["not_deep"] += 1
+    reliability = {}
+    for src, stats in source_stats.items():
+        if stats["total"]:
+            reliability[src] = round(100 * stats["not_deep"] / stats["total"], 1)
+    return reliability

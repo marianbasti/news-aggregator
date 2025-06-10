@@ -480,6 +480,7 @@
                     <h2>Articles Requiring Deep Analysis</h2>
                     <canvas id="deepAnalysisRequiredChart"></canvas>
                     <a href="/api/db/articles?aggregate=llm_requires_deep_analysis" class="api-link">View API data →</a>
+                    <div id="deepAnalysisRequiredFallback" style="color:#888; font-size:13px; margin-top:8px;"></div>
                 </div>
             </div>
             
@@ -499,6 +500,7 @@
                     <h2>Top Key Claims</h2>
                     <canvas id="keyClaimsChart"></canvas>
                     <a href="/api/db/articles?aggregate=llm_key_claim" class="api-link">View API data →</a>
+                    <div id="keyClaimsFallback" style="color:#888; font-size:13px; margin-top:8px;"></div>
                 </div>
                 
                 <!-- 5. Source Reliability Metrics -->
@@ -506,6 +508,7 @@
                     <h2>Source Reliability Scores (%)</h2>
                     <canvas id="reliabilityChart"></canvas>
                     <p class="chart-note">Higher score = fewer articles requiring deep analysis</p>
+                    <div id="reliabilityFallback" style="color:#888; font-size:13px; margin-top:8px;"></div>
                 </div>
             </div>
             
@@ -1071,7 +1074,11 @@
                 }
             }
         });
-        
+        // Fallback message for key claims
+        if (!keyClaimsLabels.length || !keyClaimsData.length || (keyClaimsLabels.length === 1 && keyClaimsLabels[0] === 'No key claims data')) {
+            document.getElementById('keyClaimsFallback').textContent = 'No key claims data available.';
+        }
+
         // 5. Source Reliability Chart
         const reliabilityLabels = {{ sources_reliability.keys()|list|tojson if sources_reliability else []|tojson }};
         const reliabilityData = {{ sources_reliability.values()|list|tojson if sources_reliability else []|tojson }};
@@ -1099,7 +1106,11 @@
                 }
             }
         });
-        
+        // Fallback message for reliability
+        if (!reliabilityLabels.length || !reliabilityData.length || (reliabilityLabels.length === 1 && reliabilityLabels[0] === 'No reliability data')) {
+            document.getElementById('reliabilityFallback').textContent = 'No reliability data available.';
+        }
+
         // 6. Deep Analysis Requirements Chart
         const deepAnalysisLabels = {{ deep_analysis_required.keys()|list|tojson if deep_analysis_required else []|tojson }};
         const deepAnalysisData = {{ deep_analysis_required.values()|list|tojson if deep_analysis_required else []|tojson }};
@@ -1134,6 +1145,10 @@
                 }
             }
         });
+        // Fallback message for deep analysis
+        if (!deepAnalysisLabels.length || !deepAnalysisData.length || (deepAnalysisLabels.length === 1 && deepAnalysisLabels[0] === 'No deep analysis data')) {
+            document.getElementById('deepAnalysisRequiredFallback').textContent = 'No deep analysis data available.';
+        }
     </script>
 
     <!-- --- Robust Resizable Columns Logic (CSS Grid) --- -->
