@@ -39,8 +39,8 @@ jobs:
       env:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
-        # Clone the private dataset repository
-        git clone https://huggingface.co/datasets/marianbasti/news-ar dataset_repo
+        # Clone the private dataset repository with authentication
+        git clone https://oauth2:$HF_TOKEN@huggingface.co/datasets/marianbasti/news-ar dataset_repo
 
     - name: Fetch news articles
       run: |
