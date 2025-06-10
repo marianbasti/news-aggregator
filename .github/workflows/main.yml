@@ -162,47 +162,6 @@ jobs:
           ls -la
         fi
 
-    - name: Create workflow summary
-      if: always()
-      run: |
-        echo "## Daily News Fetch Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        
-        # Check if articles were fetched
-        if [ -f "new_articles/metadata.json" ]; then
-          echo "✅ **Update successful**" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Extract metadata
-          TOTAL_ARTICLES=$(python -c "
-          import json
-          try:
-              with open('new_articles/metadata.json', 'r') as f:
-                  data = json.load(f)
-                  print(data.get('total_articles', 0))
-          except:
-              print(0)
-          ")
-          SOURCES_COUNT=$(python -c "
-          import json
-          try:
-              with open('new_articles/metadata.json', 'r') as f:
-                  data = json.load(f)
-                  print(len(data.get('sources', [])))
-          except:
-              print(0)
-          ")
-          
-          echo "- **Articles fetched:** $TOTAL_ARTICLES" >> $GITHUB_STEP_SUMMARY
-          echo "- **News sources:** $SOURCES_COUNT" >> $GITHUB_STEP_SUMMARY
-          echo "- **Dataset repository:** [marianbasti/news-ar](https://huggingface.co/datasets/marianbasti/news-ar)" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "❌ **Update failed**" >> $GITHUB_STEP_SUMMARY
-        fi
-        
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Run date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
-
     - name: Cleanup
       if: always()
       run: |
