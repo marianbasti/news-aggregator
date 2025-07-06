@@ -29,20 +29,19 @@ jobs:
         pip install -r requirements.txt
         # Install additional packages for dataset handling
         pip install datasets huggingface_hub pandas
+        # Install huggingface-cli for uploading files
+        pip install huggingface_hub[cli]
 
     - name: Configure git
       run: |
         git config --global user.name "GitHub Actions Bot"
         git config --global user.email "actions@github.com"
 
-    - name: Clone dataset repository
-      env:
-        HF_TOKEN: ${{ secrets.HF_TOKEN }}
-      run: |
-        # Clone the private dataset repository with authentication
-        git clone https://oauth2:$HF_TOKEN@huggingface.co/datasets/marianbasti/news-ar dataset_repo
+    # Note: No longer cloning dataset repository since we're using HF CLI uploads directly
 
     - name: Fetch and append news articles
+      env:
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
         python -c "
         import sys
@@ -57,18 +56,28 @@ jobs:
         logging.basicConfig(level=logging.INFO)
         logger = logging.getLogger(__name__)
 
-        articles_path = 'dataset_repo/articles.jsonl'
-        new_articles_path = 'new_articles/articles.jsonl'
-
-        # Load existing articles
+        # Download existing articles from Hugging Face Hub if they exist
         existing_articles = []
-        if os.path.exists(articles_path):
+        try:
+            from huggingface_hub import hf_hub_download
+            articles_path = hf_hub_download(
+                repo_id='marianbasti/news-ar',
+                filename='articles.jsonl',
+                repo_type='dataset',
+                token=os.environ.get('HF_TOKEN')
+            )
+            logger.info(f'Downloaded existing articles from: {articles_path}')
             with open(articles_path, 'r', encoding='utf-8') as f:
                 for line in f:
                     try:
                         existing_articles.append(json.loads(line))
                     except Exception:
                         continue
+            logger.info(f'Loaded {len(existing_articles)} existing articles')
+        except Exception as e:
+            logger.info(f'Could not download existing articles (this is normal for first run): {e}')
+
+        new_articles_path = 'new_articles/articles.jsonl'
 
         # Fetch new articles
         try:
@@ -126,47 +135,46 @@ jobs:
             sys.exit(1)
         "
         
-    - name: Commit and push dataset changes
+    - name: Upload dataset files to Hugging Face Hub
       env:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
-        # Copy new articles to dataset repository
+        # Authenticate with Hugging Face Hub
+        huggingface-cli login --token $HF_TOKEN
+        
+        # Check if new_articles directory exists and upload files
         if [ -d "new_articles" ]; then
-          echo "Copying files to dataset repository..."
-          cp new_articles/* dataset_repo/ 2>/dev/null || true
+          echo "Uploading files to Hugging Face Hub..."
           ls -la new_articles/
-          echo "Files in dataset_repo after copy:"
-          ls -la dataset_repo/
-        fi
-        
-        cd dataset_repo
-        
-        # Check if there are changes
-        if [ -n "$(git status --porcelain)" ]; then
-          echo "Changes detected, committing..."
-          git status
           
-          # Add all files
-          git add .
+          # Upload each file if it exists
+          if [ -f "new_articles/articles.jsonl" ]; then
+            echo "Uploading articles.jsonl..."
+            huggingface-cli upload marianbasti/news-ar new_articles/articles.jsonl articles.jsonl --repo-type dataset
+          fi
           
-          # Get article count from the correct file
-          ARTICLE_COUNT=$(wc -l < articles.jsonl 2>/dev/null || echo "0")
+          if [ -f "new_articles/articles.csv" ]; then
+            echo "Uploading articles.csv..."
+            huggingface-cli upload marianbasti/news-ar new_articles/articles.csv articles.csv --repo-type dataset
+          fi
           
-          # Create commit message
-          git commit -m "Daily update: $(date -u '+%Y-%m-%d %H:%M UTC') - $ARTICLE_COUNT articles"
+          if [ -f "new_articles/articles.parquet" ]; then
+            echo "Uploading articles.parquet..."
+            huggingface-cli upload marianbasti/news-ar new_articles/articles.parquet articles.parquet --repo-type dataset
+          fi
           
-          # Push changes
-          git push
+          if [ -f "new_articles/metadata.json" ]; then
+            echo "Uploading metadata.json..."
+            huggingface-cli upload marianbasti/news-ar new_articles/metadata.json metadata.json --repo-type dataset
+          fi
           
-          echo "✅ Dataset updated successfully with $ARTICLE_COUNT articles"
+          echo "✅ Dataset files uploaded successfully to Hugging Face Hub"
         else
-          echo "ℹ️ No changes to commit"
-          echo "Current files in dataset repo:"
-          ls -la
+          echo "ℹ️ No new_articles directory found, skipping upload"
         fi
 
     - name: Cleanup
       if: always()
       run: |
         # Clean up temporary files
-        rm -rf new_articles dataset_repo
+        rm -rf new_articles
