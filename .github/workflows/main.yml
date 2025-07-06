@@ -141,10 +141,26 @@ jobs:
         
         cd dataset_repo
         
+        # Install and initialize Git LFS
+        echo "Installing and initializing Git LFS..."
+        git lfs install
+        
+        # Track dataset file types with Git LFS
+        echo "Setting up LFS tracking for dataset files..."
+        git lfs track "*.jsonl"
+        git lfs track "*.csv"
+        git lfs track "*.parquet"
+        
         # Check if there are changes
         if [ -n "$(git status --porcelain)" ]; then
           echo "Changes detected, committing..."
           git status
+          
+          # Add .gitattributes if it was modified
+          if [ -f ".gitattributes" ]; then
+            echo "Adding .gitattributes file..."
+            git add .gitattributes
+          fi
           
           # Add all files
           git add .
