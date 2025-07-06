@@ -30,19 +30,11 @@ jobs:
         # Install additional packages for dataset handling
         pip install datasets huggingface_hub pandas
 
-    - name: Configure git
+    - name: Install Hugging Face CLI
       run: |
-        git config --global user.name "GitHub Actions Bot"
-        git config --global user.email "actions@github.com"
+        pip install huggingface_hub[cli]
 
-    - name: Clone dataset repository
-      env:
-        HF_TOKEN: ${{ secrets.HF_TOKEN }}
-      run: |
-        # Clone the private dataset repository with authentication
-        git clone https://oauth2:$HF_TOKEN@huggingface.co/datasets/marianbasti/news-ar dataset_repo
-
-    - name: Fetch and append news articles
+    - name: Fetch and export news articles
       run: |
         python -c "
         import sys
@@ -57,18 +49,7 @@ jobs:
         logging.basicConfig(level=logging.INFO)
         logger = logging.getLogger(__name__)
 
-        articles_path = 'dataset_repo/articles.jsonl'
         new_articles_path = 'new_articles/articles.jsonl'
-
-        # Load existing articles
-        existing_articles = []
-        if os.path.exists(articles_path):
-            with open(articles_path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    try:
-                        existing_articles.append(json.loads(line))
-                    except Exception:
-                        continue
 
         # Fetch new articles
         try:
@@ -91,34 +72,28 @@ jobs:
                     }
                     articles_data.append(article_data)
 
-                # Merge and deduplicate by URL
-                all_articles = {a['url']: a for a in existing_articles}
-                for a in articles_data:
-                    all_articles[a['url']] = a
-
-                merged_articles = list(all_articles.values())
-                logger.info(f'Merged dataset with {len(merged_articles)} articles')
+                logger.info(f'Prepared {len(articles_data)} articles for export')
 
                 os.makedirs('new_articles', exist_ok=True)
                 # Save as JSONL
                 with open(new_articles_path, 'w', encoding='utf-8') as f:
-                    for article in merged_articles:
+                    for article in articles_data:
                         f.write(json.dumps(article, ensure_ascii=False) + '\n')
                 # Save as CSV
-                df = pd.DataFrame(merged_articles)
+                df = pd.DataFrame(articles_data)
                 df.to_csv('new_articles/articles.csv', index=False, encoding='utf-8')
                 # Save as Parquet
                 df.to_parquet('new_articles/articles.parquet', index=False)
                 # Metadata
                 metadata = {
                     'export_date': datetime.now(timezone.utc).isoformat(),
-                    'total_articles': len(merged_articles),
-                    'sources': list(set(a['source_name'] for a in merged_articles if a['source_name'])),
+                    'total_articles': len(articles_data),
+                    'sources': list(set(a['source_name'] for a in articles_data if a['source_name'])),
                     'fetch_run_timestamp': datetime.now(timezone.utc).isoformat()
                 }
                 with open('new_articles/metadata.json', 'w', encoding='utf-8') as f:
                     json.dump(metadata, f, indent=2, ensure_ascii=False)
-                logger.info('Articles exported and appended successfully')
+                logger.info('Articles exported successfully')
             else:
                 logger.warning('No new articles found')
         except Exception as e:
@@ -126,47 +101,37 @@ jobs:
             sys.exit(1)
         "
         
-    - name: Commit and push dataset changes
+    - name: Upload to Hugging Face Hub
       env:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
-        # Copy new articles to dataset repository
+        # Set up authentication with Hugging Face
+        huggingface-cli login --token $HF_TOKEN
+        
+        # Check if new_articles directory exists and upload files
         if [ -d "new_articles" ]; then
-          echo "Copying files to dataset repository..."
-          cp new_articles/* dataset_repo/ 2>/dev/null || true
+          echo "Uploading files to Hugging Face Hub..."
           ls -la new_articles/
-          echo "Files in dataset_repo after copy:"
-          ls -la dataset_repo/
-        fi
-        
-        cd dataset_repo
-        
-        # Check if there are changes
-        if [ -n "$(git status --porcelain)" ]; then
-          echo "Changes detected, committing..."
-          git status
           
-          # Add all files
-          git add .
+          # Upload each file if it exists
+          for file in articles.jsonl articles.csv articles.parquet metadata.json; do
+            if [ -f "new_articles/$file" ]; then
+              echo "Uploading $file..."
+              huggingface-cli upload marianbasti/news-ar "new_articles/$file" "$file"
+            else
+              echo "File $file not found, skipping..."
+            fi
+          done
           
-          # Get article count from the correct file
-          ARTICLE_COUNT=$(wc -l < articles.jsonl 2>/dev/null || echo "0")
-          
-          # Create commit message
-          git commit -m "Daily update: $(date -u '+%Y-%m-%d %H:%M UTC') - $ARTICLE_COUNT articles"
-          
-          # Push changes
-          git push
-          
+          # Get article count for the status message
+          ARTICLE_COUNT=$(wc -l < new_articles/articles.jsonl 2>/dev/null || echo "0")
           echo "✅ Dataset updated successfully with $ARTICLE_COUNT articles"
         else
-          echo "ℹ️ No changes to commit"
-          echo "Current files in dataset repo:"
-          ls -la
+          echo "ℹ️ No new_articles directory found, nothing to upload"
         fi
 
     - name: Cleanup
       if: always()
       run: |
         # Clean up temporary files
-        rm -rf new_articles dataset_repo
+        rm -rf new_articles
