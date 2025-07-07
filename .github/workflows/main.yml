@@ -34,6 +34,13 @@ jobs:
       run: |
         pip install huggingface_hub[cli]
 
+    - name: Authenticate with Hugging Face
+      env:
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      run: |
+        # Set up authentication with Hugging Face for downloading existing data
+        huggingface-cli login --token $HF_TOKEN
+
     - name: Fetch and export news articles
       run: |
         python -c "
@@ -42,6 +49,7 @@ jobs:
         import json
         import pandas as pd
         from datetime import datetime, timezone
+        import subprocess
         sys.path.append('.')
         from app.services.rss_fetcher import fetch_all_articles
         import logging
@@ -50,64 +58,109 @@ jobs:
         logger = logging.getLogger(__name__)
 
         new_articles_path = 'new_articles/articles.jsonl'
+        
+        # Create new_articles directory
+        os.makedirs('new_articles', exist_ok=True)
+
+        # Try to download existing articles.jsonl from Hugging Face Hub
+        existing_articles = []
+        try:
+            logger.info('Attempting to download existing articles.jsonl from Hugging Face Hub...')
+            result = subprocess.run([
+                'huggingface-cli', 'download', 'marianbasti/news-ar', 
+                'articles.jsonl', '--local-dir', 'new_articles'
+            ], capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                logger.info('Successfully downloaded existing articles.jsonl')
+                # Load existing articles
+                with open(new_articles_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        if line.strip():
+                            existing_articles.append(json.loads(line))
+                logger.info(f'Loaded {len(existing_articles)} existing articles')
+            else:
+                logger.info('No existing articles.jsonl found or download failed, starting fresh')
+        except Exception as e:
+            logger.warning(f'Could not download existing articles: {e}')
+            logger.info('Starting with empty dataset')
 
         # Fetch new articles
         try:
             logger.info('Fetching articles from RSS feeds...')
             articles = fetch_all_articles()
-            logger.info(f'Fetched {len(articles)} articles')
-            if articles:
-                articles_data = []
-                for article in articles:
-                    article_data = {
-                        'title': article.title,
-                        'url': str(article.url),
-                        'source_name': article.source_name,
-                        'source_type': article.source_type,
-                        'content': article.content or '',
-                        'summary': article.summary or '',
-                        'fetched_date': article.fetched_date.isoformat() if article.fetched_date else datetime.now(timezone.utc).isoformat(),
-                        'publication_date': article.publication_date.isoformat() if article.publication_date else None,
-                        'export_timestamp': datetime.now(timezone.utc).isoformat()
-                    }
-                    articles_data.append(article_data)
-
-                logger.info(f'Prepared {len(articles_data)} articles for export')
-
-                os.makedirs('new_articles', exist_ok=True)
-                # Save as JSONL
-                with open(new_articles_path, 'w', encoding='utf-8') as f:
-                    for article in articles_data:
-                        f.write(json.dumps(article, ensure_ascii=False) + '\n')
-                # Save as CSV
-                df = pd.DataFrame(articles_data)
-                df.to_csv('new_articles/articles.csv', index=False, encoding='utf-8')
-                # Save as Parquet
-                df.to_parquet('new_articles/articles.parquet', index=False)
-                # Metadata
-                metadata = {
-                    'export_date': datetime.now(timezone.utc).isoformat(),
-                    'total_articles': len(articles_data),
-                    'sources': list(set(a['source_name'] for a in articles_data if a['source_name'])),
-                    'fetch_run_timestamp': datetime.now(timezone.utc).isoformat()
+            logger.info(f'Fetched {len(articles)} new articles')
+            
+            # Convert new articles to dict format
+            new_articles_data = []
+            for article in articles:
+                article_data = {
+                    'title': article.title,
+                    'url': str(article.url),
+                    'source_name': article.source_name,
+                    'source_type': article.source_type,
+                    'content': article.content or '',
+                    'summary': article.summary or '',
+                    'fetched_date': article.fetched_date.isoformat() if article.fetched_date else datetime.now(timezone.utc).isoformat(),
+                    'publication_date': article.publication_date.isoformat() if article.publication_date else None,
+                    'export_timestamp': datetime.now(timezone.utc).isoformat()
                 }
-                with open('new_articles/metadata.json', 'w', encoding='utf-8') as f:
-                    json.dump(metadata, f, indent=2, ensure_ascii=False)
-                logger.info('Articles exported successfully')
-            else:
-                logger.warning('No new articles found')
+                new_articles_data.append(article_data)
+
+            logger.info(f'Prepared {len(new_articles_data)} new articles for merging')
+
+            # Create a URL-based index of existing articles for deduplication
+            existing_urls = set(article.get('url') for article in existing_articles)
+            logger.info(f'Found {len(existing_urls)} existing article URLs')
+
+            # Merge new articles with existing ones, deduplicating by URL
+            merged_articles = existing_articles.copy()
+            new_articles_added = 0
+            
+            for article in new_articles_data:
+                if article['url'] not in existing_urls:
+                    merged_articles.append(article)
+                    existing_urls.add(article['url'])
+                    new_articles_added += 1
+                else:
+                    logger.debug(f'Skipping duplicate article: {article[\"url\"]}')
+
+            logger.info(f'Added {new_articles_added} new articles to dataset')
+            logger.info(f'Total articles in merged dataset: {len(merged_articles)}')
+
+            # Write merged results to all formats
+            # Save as JSONL
+            with open(new_articles_path, 'w', encoding='utf-8') as f:
+                for article in merged_articles:
+                    f.write(json.dumps(article, ensure_ascii=False) + '\n')
+            
+            # Save as CSV
+            df = pd.DataFrame(merged_articles)
+            df.to_csv('new_articles/articles.csv', index=False, encoding='utf-8')
+            
+            # Save as Parquet
+            df.to_parquet('new_articles/articles.parquet', index=False)
+            
+            # Update metadata
+            metadata = {
+                'export_date': datetime.now(timezone.utc).isoformat(),
+                'total_articles': len(merged_articles),
+                'new_articles_added': new_articles_added,
+                'sources': list(set(a['source_name'] for a in merged_articles if a['source_name'])),
+                'fetch_run_timestamp': datetime.now(timezone.utc).isoformat()
+            }
+            with open('new_articles/metadata.json', 'w', encoding='utf-8') as f:
+                json.dump(metadata, f, indent=2, ensure_ascii=False)
+            
+            logger.info('Articles merged and exported successfully')
+            
         except Exception as e:
-            logger.error(f'Error in article fetching: {e}', exc_info=True)
+            logger.error(f'Error in article fetching or merging: {e}', exc_info=True)
             sys.exit(1)
         "
         
     - name: Upload to Hugging Face Hub
-      env:
-        HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
-        # Set up authentication with Hugging Face
-        huggingface-cli login --token $HF_TOKEN
-        
         # Check if new_articles directory exists and upload files
         if [ -d "new_articles" ]; then
           echo "Uploading files to Hugging Face Hub..."
