@@ -167,7 +167,7 @@ jobs:
           for file in articles.jsonl articles.csv articles.parquet metadata.json; do
             if [ -f "new_articles/$file" ]; then
               echo "Uploading $file..."
-              huggingface-cli upload marianbasti/news-ar "new_articles/$file" "$file"
+              huggingface-cli upload marianbasti/news-ar "new_articles/$file" "$file" --repo-type=dataset
             else
               echo "File $file not found, skipping..."
             fi
