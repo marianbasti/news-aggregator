@@ -66,7 +66,7 @@ jobs:
             logger.info('Attempting to download existing articles.jsonl from Hugging Face Hub...')
             result = subprocess.run([
                 'huggingface-cli', 'download', 'marianbasti/news-ar',
-                'articles.jsonl', '--local-dir', 'new_articles'
+                'articles.jsonl', '--local-dir', 'new_articles', '--repo-type=dataset'
             ], capture_output=True, text=True)
             if result.returncode == 0:
                 logger.info('Successfully downloaded existing articles.jsonl')
