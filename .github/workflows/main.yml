@@ -42,6 +42,8 @@ jobs:
 
     - name: Fetch and export news articles
       run: |
+        mkdir new_articles
+        huggingface-cli download marianbasti/news-ar articles.parquet --local-dir new_articles --repo-type=dataset
         python -c "
         import sys
         import os
@@ -56,28 +58,24 @@ jobs:
         logging.basicConfig(level=logging.INFO)
         logger = logging.getLogger(__name__)
 
-        new_articles_path = 'new_articles/articles.jsonl'
-        # Create new_articles directory
-        os.makedirs('new_articles', exist_ok=True)
-
+        new_articles_path = 'new_articles/articles.parquet'
         # Try to download existing articles.jsonl from Hugging Face Hub
         existing_articles = []
         try:
             logger.info('Attempting to download existing articles.jsonl from Hugging Face Hub...')
-            result = subprocess.run([
-                'huggingface-cli', 'download', 'marianbasti/news-ar',
-                'articles.jsonl', '--local-dir', 'new_articles', '--repo-type=dataset'
-            ], capture_output=True, text=True)
-            if result.returncode == 0:
-                logger.info('Successfully downloaded existing articles.jsonl')
-                # Load existing articles
-                with open(new_articles_path, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        if line.strip():
-                            existing_articles.append(json.loads(line))
-                logger.info(f'Loaded {len(existing_articles)} existing articles')
+            new_articles_path = 'new_articles/articles.parquet'
+            existing_articles = []
+            
+            if os.path.exists(new_articles_path):
+                try:
+                    df_existing = pd.read_parquet(new_articles_path)
+                    existing_articles = df_existing.to_dict(orient='records')
+                    logger.info(f'Loaded {len(existing_articles)} existing articles from Parquet')
+                except Exception as e:
+                    logger.warning(f'Could not load existing articles from Parquet: {e}')
+                    existing_articles = []
             else:
-                logger.info('No existing articles.jsonl found or download failed, starting fresh')
+                logger.info('No existing articles.parquet found, starting fresh')
         except Exception as e:
             logger.warning(f'Could not download existing articles: {e}')
             logger.info('Starting with empty dataset')
@@ -167,7 +165,8 @@ jobs:
           for file in articles.jsonl articles.csv articles.parquet metadata.json; do
             if [ -f "new_articles/$file" ]; then
               echo "Uploading $file..."
-              huggingface-cli upload marianbasti/news-ar "new_articles/$file" "$file" --repo-type=dataset
+              huggingface-cli upload marianbasti/news-ar "new_articles/articles.parquet" "articles.parquet" --repo-type=dataset
+              huggingface-cli upload marianbasti/news-ar "new_articles/metadata.json" "metadata.json" --repo-type=dataset
             else
               echo "File $file not found, skipping..."
             fi
