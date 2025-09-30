@@ -1,4 +1,4 @@
-# News Aggregator
+#  News Aggregator
 
 This project is a news aggregator application designed to discover, analyze, and present news from various sources.
 
