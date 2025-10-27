@@ -38,12 +38,12 @@ jobs:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
         # Set up authentication with Hugging Face for downloading existing data
-        huggingface-cli login --token $HF_TOKEN
+        hf auth login --token $HF_TOKEN
 
     - name: Fetch and export news articles
       run: |
         mkdir new_articles
-        huggingface-cli download marianbasti/news-ar articles.parquet --local-dir new_articles --repo-type=dataset
+        hf download marianbasti/news-ar articles.parquet --local-dir new_articles --repo-type=dataset
         python -c "
         import sys
         import os
@@ -165,8 +165,8 @@ jobs:
           for file in articles.jsonl articles.csv articles.parquet metadata.json; do
             if [ -f "new_articles/$file" ]; then
               echo "Uploading $file..."
-              huggingface-cli upload marianbasti/news-ar "new_articles/articles.parquet" "articles.parquet" --repo-type=dataset
-              huggingface-cli upload marianbasti/news-ar "new_articles/metadata.json" "metadata.json" --repo-type=dataset
+              hf upload marianbasti/news-ar "new_articles/articles.parquet" "articles.parquet" --repo-type=dataset
+              hf upload marianbasti/news-ar "new_articles/metadata.json" "metadata.json" --repo-type=dataset
             else
               echo "File $file not found, skipping..."
             fi
