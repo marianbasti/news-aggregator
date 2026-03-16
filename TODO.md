@@ -1,5 +1,5 @@
 # TODO - News Aggregator Project
-
+---
 Project Summary: Phase 1 Completion
 
 We have successfully laid the groundwork for the News Aggregator application. The key accomplishments include:
