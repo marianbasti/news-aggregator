@@ -6,8 +6,6 @@ on:
     - cron: '0 8,16,23 * * *'
   workflow_dispatch: # Allow manual triggering
 
-env:
-  PYTHON_VERSION: '3.11'
 jobs:
   fetch-and-update-dataset:
     runs-on: self-hosted
@@ -18,7 +16,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
+        python3 -m pip install --upgrade pip
         pip install -r requirements.txt
         # Install additional packages for dataset handling
         pip install datasets huggingface_hub pandas
@@ -32,7 +30,7 @@ jobs:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
         # Set up authentication with Hugging Face for downloading existing data
-        python -c "
+        python3 -c "
         from huggingface_hub import login, whoami
         import os
         
@@ -47,7 +45,7 @@ jobs:
       run: |
         mkdir new_articles
         hf download marianbasti/news-ar articles.parquet --local-dir new_articles --repo-type=dataset
-        python -c "
+        python3 -c "
         import sys
         import os
         import json
